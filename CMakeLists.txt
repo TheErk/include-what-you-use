@@ -8,8 +8,14 @@ endif()
 project(include-what-you-use)
 
 # TODO: Make these configurable
-set(IWYU_LLVM_CMAKE_DIR /home/kgrasman/code/llvm-trunk/build/lib/cmake/llvm)
-set(IWYU_CLANG_CMAKE_DIR /home/kgrasman/code/llvm-trunk/build/lib/cmake/clang)
+# set(IWYU_LLVM_CMAKE_DIR /home/kgrasman/code/llvm-trunk/build/lib/cmake/llvm)
+# set(IWYU_CLANG_CMAKE_DIR /home/kgrasman/code/llvm-trunk/build/lib/cmake/clang)
+
+if( NOT DEFINED IWYU_LLVM_CMAKE_DIR OR NOT DEFINED IWYU_CLANG_CMAKE_DIR )
+  message(FATAL_ERROR
+    "Don't know how to find LLVM or Clang CMake modules. "
+    "Use -DIWYU_LLVM_CMAKE_DIR=/abc and -DIWYU_CLANG_CMAKE_DIR=/xyz")
+endif()
 
 # Pull in LLVM and Clang CMake modules and add their build options
 set(LLVM_DIR ${IWYU_LLVM_CMAKE_DIR})
