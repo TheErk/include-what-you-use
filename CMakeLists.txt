@@ -24,6 +24,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${LLVM_DIR}")
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 include(AddLLVM)
+include(HandleLLVMOptions)
 
 add_definitions(${LLVM_DEFINITIONS})
 
