@@ -35,11 +35,6 @@ include_directories(
   ${CLANG_INCLUDE_DIRS}
   )
 
-link_directories(
-  ${LLVM_LIBRARY_DIRS}
-  ${CLANG_LIBRARY_DIRS}
-  )
-
 # Pick up Git revision so we can report it in version information.
 include(FindGit)
 if( GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git" )
