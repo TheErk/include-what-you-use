@@ -10,6 +10,9 @@ project(include-what-you-use)
 # TODO: Make these configurable
 # set(IWYU_LLVM_CMAKE_DIR /home/kgrasman/code/llvm-trunk/build/lib/cmake/llvm)
 # set(IWYU_CLANG_CMAKE_DIR /home/kgrasman/code/llvm-trunk/build/lib/cmake/clang)
+set(IWYU_LLVM_CMAKE_DIR "${CMAKE_INSTALL_PREFIX}/lib/cmake/llvm" CACHE FILEPATH "Path to lib/cmake/llvm directory")
+set(IWYU_CLANG_CMAKE_DIR "${CMAKE_INSTALL_PREFIX}/lib/cmake/clang" CACHE FILEPATH "Path to lib/cmake/llvm directory")
+
 
 if( NOT DEFINED IWYU_LLVM_CMAKE_DIR OR NOT DEFINED IWYU_CLANG_CMAKE_DIR )
   message(FATAL_ERROR
@@ -62,11 +65,16 @@ add_llvm_executable(include-what-you-use
   iwyu_verrs.cc
   )
 
+# Check whether if LLVM shared lib is available from the LLVM imported targets
+if (TARGET LLVM)
+  set(LLVM_LIBS LLVM)
+  message(STATUS "Found LLVM shared lib target, using it.")
+else()
+  set(LLVM_LIBS LLVMSupport LLVMX86AsmParser LLVMX86Desc LLVMX86Info)
+endif()
+
 target_link_libraries(include-what-you-use
-  LLVMSupport
-  LLVMX86AsmParser
-  LLVMX86Desc
-  LLVMX86Info
+  ${LLVM_LIBS}
   clangBasic
   clangLex
   clangAST
