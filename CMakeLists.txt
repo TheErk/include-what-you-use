@@ -1,33 +1,50 @@
 cmake_minimum_required(VERSION 3.4.3)
 
-if( POLICY CMP0048 )
-  # Silence CMP0048 warning about missing project VERSION.
-  cmake_policy(SET CMP0048 NEW)
+# If we are not building as a part of LLVM/Clang, build IWYU as a
+# standalone project, using LLVM and Clang as an external libraries:
+if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
+  set(IWYU_IS_BUILT_STANDALONE TRUE)
+  message(STATUS "IWYU: is built standalone.")
+  if( POLICY CMP0048 )
+    # Silence CMP0048 warning about missing project VERSION.
+    cmake_policy(SET CMP0048 NEW)
+  endif()
+
+  project(include-what-you-use)
+
+  # Use llvm-config to discover CMake module directories
+  find_program(LLVM_CONFIG_EXECUTABLE "llvm-config")
+  if (LLVM_CONFIG_EXECUTABLE)
+    message(STATUS "IWYU: Found llvm-config as ${LLVM_CONFIG_EXECUTABLE}")
+    execute_process(
+      COMMAND ${LLVM_CONFIG_EXECUTABLE} --cmakedir
+      RESULT_VARIABLE HAD_ERROR
+      OUTPUT_VARIABLE CONFIG_OUTPUT
+    )
+  else(LLVM_CONFIG_EXECUTABLE)
+    message(STATUS "IWYU: llvm-config not found trying usual prefix for finding LLVM/Clang modules.")
+    set(IWYU_LLVM_CMAKE_DIR "${CMAKE_INSTALL_PREFIX}/lib/cmake/llvm" CACHE FILEPATH "Path to lib/cmake/llvm directory")
+    set(IWYU_CLANG_CMAKE_DIR "${CMAKE_INSTALL_PREFIX}/lib/cmake/clang" CACHE FILEPATH "Path to lib/cmake/llvm directory")
+  endif(LLVM_CONFIG_EXECUTABLE)
+
+  if( NOT EXISTS ${IWYU_LLVM_CMAKE_DIR} OR NOT EXISTS ${IWYU_CLANG_CMAKE_DIR} )
+    message(FATAL_ERROR
+      "IWYU: Don't know how to find LLVM or Clang CMake modules. "
+      "Use -DIWYU_LLVM_CMAKE_DIR=/abc and -DIWYU_CLANG_CMAKE_DIR=/xyz")
+  endif()
+
+  # Pull in LLVM and Clang CMake modules and add their build options
+  list(APPEND CMAKE_MODULE_PATH ${IWYU_LLVM_CMAKE_DIR})
+  list(APPEND CMAKE_MODULE_PATH ${IWYU_CLANG_CMAKE_DIR})
+  find_package(LLVM REQUIRED CONFIG)
+  find_package(Clang REQUIRED CONFIG)
+  include(AddLLVM)
+  include(HandleLLVMOptions)
+else()
+  # This the case when building IWYU in the LLVM/Clang tree.
+  set(IWYU_IS_BUILT_STANDALONE FALSE)
+  message(STATUS "IWYU: is built inside the LLVM/Clang tree.")
 endif()
-
-project(include-what-you-use)
-
-# TODO: Make these configurable
-# set(IWYU_LLVM_CMAKE_DIR /home/kgrasman/code/llvm-trunk/build/lib/cmake/llvm)
-# set(IWYU_CLANG_CMAKE_DIR /home/kgrasman/code/llvm-trunk/build/lib/cmake/clang)
-set(IWYU_LLVM_CMAKE_DIR "${CMAKE_INSTALL_PREFIX}/lib/cmake/llvm" CACHE FILEPATH "Path to lib/cmake/llvm directory")
-set(IWYU_CLANG_CMAKE_DIR "${CMAKE_INSTALL_PREFIX}/lib/cmake/clang" CACHE FILEPATH "Path to lib/cmake/llvm directory")
-
-
-if( NOT DEFINED IWYU_LLVM_CMAKE_DIR OR NOT DEFINED IWYU_CLANG_CMAKE_DIR )
-  message(FATAL_ERROR
-    "Don't know how to find LLVM or Clang CMake modules. "
-    "Use -DIWYU_LLVM_CMAKE_DIR=/abc and -DIWYU_CLANG_CMAKE_DIR=/xyz")
-endif()
-
-# Pull in LLVM and Clang CMake modules and add their build options
-set(LLVM_DIR ${IWYU_LLVM_CMAKE_DIR})
-set(Clang_DIR ${IWYU_CLANG_CMAKE_DIR})
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${LLVM_DIR}")
-find_package(LLVM REQUIRED CONFIG)
-find_package(Clang REQUIRED CONFIG)
-include(AddLLVM)
-include(HandleLLVMOptions)
 
 add_definitions(${LLVM_DEFINITIONS})
 
@@ -37,14 +54,14 @@ include_directories(
   )
 
 # Pick up Git revision so we can report it in version information.
-include(FindGit)
+find_package(Git)
 if( GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git" )
   execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     OUTPUT_VARIABLE IWYU_GIT_REV
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 else()
-  message(STATUS "Warning: IWYU Git version info not found, DO NOT release "
+  message(STATUS "IWYU: Warning: IWYU Git version info not found, DO NOT release "
                  "from this build tree!")
 endif()
 add_definitions(-DIWYU_GIT_REV="${IWYU_GIT_REV}")
@@ -65,12 +82,13 @@ add_llvm_executable(include-what-you-use
   iwyu_verrs.cc
   )
 
-# Check whether if LLVM shared lib is available from the LLVM imported targets
-if (TARGET LLVM)
+# Check whether if LLVM shared lib is available from the LLVM [imported] targets
+if (TARGET LLVM OR (NOT IWYU_IS_BUILT_STANDALONE AND LLVM_BUILD_LLVM_DYLIB))
   set(LLVM_LIBS LLVM)
-  message(STATUS "Found LLVM shared lib target, using it.")
+  message(STATUS "IWYU: LLVM shared lib target available, using it.")
 else()
   set(LLVM_LIBS LLVMSupport LLVMX86AsmParser LLVMX86Desc LLVMX86Info)
+  message(STATUS "IWYU: LLVM shared lib target not found, using individual components targets: LLVM_LIBS=${LLVM_LIBS}")
 endif()
 
 target_link_libraries(include-what-you-use
