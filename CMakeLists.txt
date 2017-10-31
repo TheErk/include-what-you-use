@@ -13,37 +13,52 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   project(include-what-you-use)
 
   # Use llvm-config to discover CMake module directories
-  find_program(LLVM_CONFIG_EXECUTABLE "llvm-config")
+  # Try in current install prefix first
+  find_program(LLVM_CONFIG_EXECUTABLE
+    NAMES "llvm-config"
+    HINTS ${CMAKE_INSTALL_PREFIX}/bin
+    NO_DEFAULT_PATH)
+  # if not found try in usual places
+  if (NOT LLVM_CONFIG_EXECUTABLE)
+    find_program(LLVM_CONFIG_EXECUTABLE NAMES "llvm-config")
+  endif()
   if (LLVM_CONFIG_EXECUTABLE)
     message(STATUS "IWYU: Found llvm-config as ${LLVM_CONFIG_EXECUTABLE}")
     execute_process(
       COMMAND ${LLVM_CONFIG_EXECUTABLE} --cmakedir
       RESULT_VARIABLE HAD_ERROR
-      OUTPUT_VARIABLE CONFIG_OUTPUT
-    )
+      OUTPUT_VARIABLE IWYU_LLVM_CMAKE_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      )
+    get_filename_component(IWYU_CLANG_CMAKE_DIR "${IWYU_LLVM_CMAKE_DIR}" DIRECTORY)
+    set(IWYU_CLANG_CMAKE_DIR "${IWYU_CLANG_CMAKE_DIR}/clang")
   else(LLVM_CONFIG_EXECUTABLE)
-    message(STATUS "IWYU: llvm-config not found trying usual prefix for finding LLVM/Clang modules.")
-    set(IWYU_LLVM_CMAKE_DIR "${CMAKE_INSTALL_PREFIX}/lib/cmake/llvm" CACHE FILEPATH "Path to lib/cmake/llvm directory")
-    set(IWYU_CLANG_CMAKE_DIR "${CMAKE_INSTALL_PREFIX}/lib/cmake/clang" CACHE FILEPATH "Path to lib/cmake/llvm directory")
+    message(STATUS "IWYU: llvm-config not found trying current install prefix for finding LLVM/Clang modules.")
+    set(IWYU_LLVM_CMAKE_DIR "${CMAKE_INSTALL_PREFIX}/lib/cmake/llvm")
+    set(IWYU_CLANG_CMAKE_DIR "${CMAKE_INSTALL_PREFIX}/lib/cmake/clang")
   endif(LLVM_CONFIG_EXECUTABLE)
 
-  if( NOT EXISTS ${IWYU_LLVM_CMAKE_DIR} OR NOT EXISTS ${IWYU_CLANG_CMAKE_DIR} )
+  if(EXISTS ${IWYU_LLVM_CMAKE_DIR} AND EXISTS ${IWYU_CLANG_CMAKE_DIR})
+    message(STATUS "IWYU: LLVM CMake module dir = ${IWYU_LLVM_CMAKE_DIR}")
+    message(STATUS "IWYU: Clang CMake module dir = ${IWYU_CLANG_CMAKE_DIR}")
+  else()
     message(FATAL_ERROR
-      "IWYU: Don't know how to find LLVM or Clang CMake modules. "
-      "Use -DIWYU_LLVM_CMAKE_DIR=/abc and -DIWYU_CLANG_CMAKE_DIR=/xyz")
+      "IWYU: Don't know how to find LLVM and/or Clang CMake modules. "
+      "Use -DIWYU_CLANG_CMAKE_DIR=/xyz -DIWYU_LLVM_CMAKE_DIR=/xyz")
   endif()
 
   # Pull in LLVM and Clang CMake modules and add their build options
   list(APPEND CMAKE_MODULE_PATH ${IWYU_LLVM_CMAKE_DIR})
   list(APPEND CMAKE_MODULE_PATH ${IWYU_CLANG_CMAKE_DIR})
+  set(LLVM_DIR ${IWYU_LLVM_CMAKE_DIR})
+  set(Clang_DIR ${IWYU_CLANG_CMAKE_DIR})
   find_package(LLVM REQUIRED CONFIG)
   find_package(Clang REQUIRED CONFIG)
   include(AddLLVM)
   include(HandleLLVMOptions)
 else()
-  # This the case when building IWYU in the LLVM/Clang tree.
   set(IWYU_IS_BUILT_STANDALONE FALSE)
-  message(STATUS "IWYU: is built inside the LLVM/Clang tree.")
+  message(STATUS "IWYU: is built inside the LLVM/Clang source tree.")
 endif()
 
 add_definitions(${LLVM_DEFINITIONS})
