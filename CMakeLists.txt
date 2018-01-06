@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.4.3)
 
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   message(STATUS "IWYU: out-of-tree configuration")
+  set(IWYU_IN_TREE_CONFIG False)
 
   if (POLICY CMP0048)
     # Silence CMP0048 warning about missing project VERSION.
@@ -22,6 +23,7 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   endif()
 else()
   message(STATUS "IWYU: in-tree configuration")
+  set(IWYU_IN_TREE_CONFIG True)
 endif()
 
 # LLVM/Clang build settings
@@ -75,12 +77,19 @@ set(IWYU_CLANG_DEPS
   clangBasic
   )
 
-set(IWYU_LLVM_DEPS
-  LLVMX86AsmParser
-  LLVMX86Desc
-  LLVMX86Info
-  LLVMSupport
+# Check whether if LLVM shared lib is available from the LLVM [imported] targets
+if (TARGET LLVM OR (IWYU_IN_TREE_CONFIG AND LLVM_BUILD_LLVM_DYLIB))
+  set(IWYU_LLVM_DEPS LLVM)
+  message(STATUS "IWYU: LLVM shared lib target available, using it.")
+else()
+  set(IWYU_LLVM_DEPS
+      LLVMX86AsmParser
+      LLVMX86Desc
+      LLVMX86Info
+      LLVMSupport
   )
+  message(STATUS "IWYU: LLVM shared lib target not found, using individual components targets: IWYU_LLVM_DEPS=${IWYU_LLVM_DEPS}")
+endif()
 
 target_link_libraries(include-what-you-use
   PRIVATE
